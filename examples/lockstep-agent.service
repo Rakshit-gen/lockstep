@@ -1,0 +1,13 @@
+# Runs on each GPU VM. When the host is about to take the VM, the hook
+# runs with LOCKSTEP_EVENT set, about an hour ahead on GPU VMs.
+[Unit]
+Description=lockstep agent: checkpoint before host maintenance
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/lockstep agent --hook /etc/lockstep/checkpoint.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
