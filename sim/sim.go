@@ -72,7 +72,7 @@ type Config struct {
 	Ckpt    float64 // checkpoint interval
 	Write   float64 // cost of the extra checkpoint before a clean stop
 
-	Margin  float64 // lockstep stops this long before a deadline
+	Margin  float64 // lockstep stops this long before a deadline; must cover the final checkpoint
 	Horizon float64 // see plan.Config; must be set, and shorter than Period
 
 	Seed uint64
@@ -89,7 +89,7 @@ func Defaults() Config {
 		// 2,048 eight GPU nodes.
 		FailRate: 419.0 / 54 / 2048,
 		Maint:    2, Repair: 4, Restart: 0.5, Ckpt: 1, Write: 5.0 / 60,
-		Margin: 1, Horizon: 14 * 24, Seed: 1,
+		Margin: 0.25, Horizon: 14 * 24, Seed: 1,
 	}
 }
 
