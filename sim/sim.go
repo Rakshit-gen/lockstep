@@ -34,9 +34,17 @@ const (
 	// Lockstep is the agent plus the plan package: batch pending events
 	// into one stop, and start them early when the job is down anyway.
 	Lockstep
+	// Both is grouped maintenance with lockstep on top, for the events
+	// grouping doesn't line up: emergencies, and planned work that a
+	// failure can carry.
+	Both
 )
 
-var policyNames = []string{"none", "agent", "grouped", "lockstep"}
+var policyNames = []string{"none", "agent", "grouped", "lockstep", "both"}
+
+func (p Policy) grouped() bool { return p == Grouped || p == Both }
+
+func (p Policy) plans() bool { return p == Lockstep || p == Both }
 
 func (p Policy) String() string { return policyNames[p] }
 
@@ -47,7 +55,7 @@ func ParsePolicy(s string) (Policy, error) {
 			return Policy(i), nil
 		}
 	}
-	return 0, fmt.Errorf("unknown policy %q (have none, agent, grouped, lockstep)", s)
+	return 0, fmt.Errorf("unknown policy %q (have none, agent, grouped, lockstep, both)", s)
 }
 
 // Config describes the world and the job. Times are in hours, rates per
@@ -143,7 +151,7 @@ func (c Config) Check() error {
 		return fmt.Errorf("sim: need at least one node and no negative spares")
 	case c.Days <= 0 || c.Period <= 0 || c.Ckpt <= 0:
 		return fmt.Errorf("sim: days, period and checkpoint interval must be positive")
-	case c.Policy == Lockstep && (c.Horizon <= 0 || c.Horizon >= c.Period-c.Maint):
+	case c.Policy.plans() && (c.Horizon <= 0 || c.Horizon >= c.Period-c.Maint):
 		// With notice as long as the period, a node shows its next event
 		// as soon as maintenance ends; an open horizon would maintain it
 		// again at once, forever.
@@ -164,7 +172,7 @@ func Run(c Config) (Result, error) {
 		n := &w.nodes[i]
 		n.up, n.emDue = true, inf
 		n.planned = w.rng.Float64() * c.Period
-		if c.Policy == Grouped {
+		if c.Policy.grouped() {
 			n.planned = phase
 		}
 		n.emAt, n.failAt = w.exp(c.EmRate), w.exp(c.FailRate)
@@ -238,7 +246,7 @@ func (w *world) step() {
 	if w.wake <= w.t+eps {
 		w.wake = inf
 	}
-	if c.Policy == Lockstep {
+	if c.Policy.plans() {
 		w.decide()
 	}
 	if !w.running {
