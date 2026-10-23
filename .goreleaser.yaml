@@ -1,0 +1,64 @@
+# Docs: https://goreleaser.com
+version: 2
+
+project_name: lockstep
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: lockstep
+    main: ./cmd/lockstep
+    binary: lockstep
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .Date }}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - README.md
+      - LICENSE
+      - examples/*
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  use: github
+
+release:
+  github:
+    owner: Rakshit-gen
+    name: lockstep
+  draft: false
+  prerelease: auto
+  footer: |
+    ---
+    Install:
+
+    ```
+    curl -fsSL https://raw.githubusercontent.com/Rakshit-gen/lockstep/main/scripts/install.sh | sh
+    ```
