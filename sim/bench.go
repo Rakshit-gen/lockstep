@@ -70,7 +70,7 @@ func (p Preset) Apply(c *Config) {
 	c.Horizon = min(14*24, p.Period/4)
 }
 
-var compared = []Policy{None, Agent, Grouped, Lockstep}
+var compared = []Policy{None, Agent, Grouped, Lockstep, Both}
 
 // Bench writes the tables the README quotes, as markdown.
 func Bench(w io.Writer, seeds int) error {
@@ -80,7 +80,7 @@ func Bench(w io.Writer, seeds int) error {
 	fmt.Fprintf(w, "Failures %.4f per node per day, from the Llama 3 paper.\n\n", d.FailRate)
 
 	fmt.Fprintf(w, "### Goodput by job size, A3 cadence, one spare per 16 nodes\n\n")
-	fmt.Fprintf(w, "| nodes | spares | none | agent | grouped | lockstep | stops agent | stops lockstep |\n|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(w, "| nodes | spares | none | agent | grouped | lockstep | both | stops agent | stops lockstep |\n|---|---|---|---|---|---|---|---|---|\n")
 	for _, size := range []int{16, 64, 256, 1024} {
 		c := Defaults()
 		c.Size, c.Spares = size, size/16
@@ -96,7 +96,7 @@ func Bench(w io.Writer, seeds int) error {
 	}
 
 	fmt.Fprintf(w, "\n### Spares, 256 nodes, A3 cadence\n\n")
-	fmt.Fprintf(w, "| spares | none | agent | grouped | lockstep |\n|---|---|---|---|---|\n")
+	fmt.Fprintf(w, "| spares | none | agent | grouped | lockstep | both |\n|---|---|---|---|---|---|\n")
 	for _, sp := range []int{0, 4, 16, 64} {
 		c := Defaults()
 		c.Size, c.Spares = 256, sp
@@ -112,7 +112,7 @@ func Bench(w io.Writer, seeds int) error {
 	}
 
 	fmt.Fprintf(w, "\n### Machine families, 256 nodes, 16 spares\n\n")
-	fmt.Fprintf(w, "| preset | period | notice | none | agent | grouped | lockstep |\n|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(w, "| preset | period | notice | none | agent | grouped | lockstep | both |\n|---|---|---|---|---|---|---|---|\n")
 	for _, p := range Presets {
 		c := Defaults()
 		c.Size, c.Spares = 256, 16

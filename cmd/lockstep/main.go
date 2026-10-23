@@ -258,7 +258,7 @@ func agentCmd(args []string) error {
 func simCmd(args []string) error {
 	fs := flag.NewFlagSet("sim", flag.ContinueOnError)
 	c := sim.Defaults()
-	policy := fs.String("policy", "", "none, agent, grouped or lockstep; all four if empty")
+	policy := fs.String("policy", "", "none, agent, grouped, lockstep or both; all of them if empty")
 	preset := fs.String("preset", "a3", "maintenance cadence: a3 (90 days, 90 days notice), a3-edge (30, 7) or gpu (14 days, 1 hour)")
 	seeds := fs.Int("seeds", 20, "runs to average")
 	fs.IntVar(&c.Size, "size", 64, "nodes the job needs")
@@ -284,7 +284,7 @@ func simCmd(args []string) error {
 	if *horizon > 0 {
 		c.Horizon = *horizon
 	}
-	pols := []sim.Policy{sim.None, sim.Agent, sim.Grouped, sim.Lockstep}
+	pols := []sim.Policy{sim.None, sim.Agent, sim.Grouped, sim.Lockstep, sim.Both}
 	if *policy != "" {
 		pol, err := sim.ParsePolicy(*policy)
 		if err != nil {
