@@ -53,14 +53,24 @@ func TestDownPiggybacks(t *testing.T) {
 		{Name: "c", Up: true},
 		{Name: "d", Up: false},
 	}
-	// No spares: only what is due within the horizon goes.
-	a := Decide(State{Now: t0, Nodes: nodes}, Config{Size: 3, Horizon: 7 * 24 * time.Hour})
+	// Three nodes are up and the job needs four, so it waits for d
+	// anyway: everything due within the horizon goes.
+	a := Decide(State{Now: t0, Nodes: nodes}, Config{Size: 4, Horizon: 7 * 24 * time.Hour})
 	if a.Stop || names(a.Trigger) != "b" {
 		t.Fatalf("horizon: %+v", a)
 	}
-	a = Decide(State{Now: t0, Nodes: nodes}, Config{Size: 3})
+	a = Decide(State{Now: t0, Nodes: nodes}, Config{Size: 4})
 	if names(a.Trigger) != "a,b" {
 		t.Fatalf("no horizon: %+v", a)
+	}
+	// The job can restart on three nodes right now, so nothing goes that
+	// would hold it up.
+	if a = Decide(State{Now: t0, Nodes: nodes}, Config{Size: 3}); len(a.Trigger) != 0 {
+		t.Fatalf("no room: %+v", a)
+	}
+	// One spare: the soonest deadline goes.
+	if a = Decide(State{Now: t0, Nodes: nodes}, Config{Size: 2}); names(a.Trigger) != "b" {
+		t.Fatalf("one spare: %+v", a)
 	}
 }
 
@@ -71,7 +81,7 @@ func TestHorizonAppliesWhileRunning(t *testing.T) {
 		{Name: "s", Up: true, Event: ev(60*24*time.Hour, true)},
 	}
 	a := Decide(State{Now: t0, Running: true, Nodes: nodes}, Config{Size: 2, Margin: time.Hour, Horizon: 14 * 24 * time.Hour})
-	// a is due, b and the spare are too far off to start early.
+	// a is due; b and the spare are too far off to start early.
 	if !a.Stop || names(a.Trigger) != "a" {
 		t.Fatalf("%+v", a)
 	}

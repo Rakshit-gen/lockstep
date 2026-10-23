@@ -78,9 +78,14 @@ func Decide(s State, c Config) Action {
 func running(s State, c Config) Action {
 	var a Action
 	var first *Node
+	up := 0
 	for i := range s.Nodes {
 		n := &s.Nodes[i]
-		if !n.Up || n.Event == nil {
+		if !n.Up {
+			continue
+		}
+		up++
+		if n.Event == nil {
 			continue
 		}
 		if !n.InJob {
@@ -94,15 +99,10 @@ func running(s State, c Config) Action {
 			first = n
 		}
 	}
-	if first == nil {
-		if len(a.Trigger) > 0 {
-			a.Why = "idle nodes have maintenance pending"
+	if first == nil || s.Now.Before(first.Event.Deadline.Add(-c.Margin)) {
+		if first != nil {
+			a.Wake = first.Event.Deadline.Add(-c.Margin)
 		}
-		return a
-	}
-	at := first.Event.Deadline.Add(-c.Margin)
-	if s.Now.Before(at) {
-		a.Wake = at
 		if len(a.Trigger) > 0 {
 			a.Why = "idle nodes have maintenance pending"
 		}
@@ -110,27 +110,54 @@ func running(s State, c Config) Action {
 	}
 	a.Stop = true
 	a.Why = fmt.Sprintf("maintenance on %s is due %s", first.Name, first.Event.Deadline.UTC().Format(time.RFC3339))
+	// first leaves either way, and so do the idle nodes going now.
+	room := up - len(a.Trigger) - 1 - c.Size
+	if first.Event.CanReschedule {
+		a.Trigger = append(a.Trigger, *first)
+	}
+	var cands []Node
 	for _, n := range s.Nodes {
-		if n.Up && n.InJob && ((n.Name == first.Name && n.Event.CanReschedule) || c.early(s.Now, &n)) {
-			a.Trigger = append(a.Trigger, n)
+		if n.Up && n.InJob && n.Name != first.Name && c.early(s.Now, &n) {
+			cands = append(cands, n)
 		}
 	}
+	a.Trigger = append(a.Trigger, ride(cands, room)...)
 	sortByName(a.Trigger)
 	return a
 }
 
 func down(s State, c Config) Action {
 	var a Action
+	var cands []Node
+	up := 0
 	for _, n := range s.Nodes {
-		if n.Up && c.early(s.Now, &n) {
-			a.Trigger = append(a.Trigger, n)
+		if !n.Up {
+			continue
+		}
+		up++
+		if c.early(s.Now, &n) {
+			cands = append(cands, n)
 		}
 	}
+	a.Trigger = ride(cands, up-c.Size)
 	if len(a.Trigger) > 0 {
 		a.Why = "job is down, so pending maintenance rides along on the restart"
 	}
 	sortByName(a.Trigger)
 	return a
+}
+
+// ride picks which candidates go along with a restart, given room spare
+// nodes beyond what the job needs. If room is negative the restart has to
+// wait for nodes to come back anyway, so all of them go. Otherwise each
+// one past the room would hold up the restart for a whole maintenance, so
+// only the room's worth go, soonest deadline first.
+func ride(cands []Node, room int) []Node {
+	if room < 0 || len(cands) <= room {
+		return cands
+	}
+	sort.SliceStable(cands, func(i, j int) bool { return cands[i].Event.Deadline.Before(cands[j].Event.Deadline) })
+	return cands[:room]
 }
 
 // early reports whether n's event can and should be started now.
