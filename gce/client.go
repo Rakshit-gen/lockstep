@@ -29,9 +29,14 @@ type Client struct {
 	Retries int
 }
 
-// New makes a client with the default endpoint and token source.
+// New makes a client with the default token source, for the endpoint in
+// LOCKSTEP_API or the real one.
 func New(project string) *Client {
-	return &Client{Base: DefaultBase, Project: project, HTTP: &http.Client{Timeout: 3 * time.Minute}, Token: DefaultToken(), Retries: 3}
+	base := os.Getenv("LOCKSTEP_API")
+	if base == "" {
+		base = DefaultBase
+	}
+	return &Client{Base: base, Project: project, HTTP: &http.Client{Timeout: 3 * time.Minute}, Token: DefaultToken(), Retries: 3}
 }
 
 // APIError is an error the API returned.
