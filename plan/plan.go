@@ -48,9 +48,10 @@ type Config struct {
 	// Margin is how long before a deadline the job is stopped, enough to
 	// write a checkpoint and stop cleanly.
 	Margin time.Duration
-	// Horizon limits which events ride along when the job is down and the
-	// spares can't cover the nodes going into maintenance: only those due
-	// within Horizon. Zero means all of them.
+	// Horizon limits which events are started early: only those due
+	// within Horizon. Zero means all of them. With 90 days of notice on a
+	// 90 day cadence a node shows its next event as soon as maintenance
+	// ends, so without a horizon every stop would maintain every node.
 	Horizon time.Duration
 }
 
@@ -84,7 +85,7 @@ func running(s State, c Config) Action {
 		}
 		if !n.InJob {
 			// An idle node can go any time without touching the job.
-			if n.Event.CanReschedule {
+			if c.early(s.Now, n) {
 				a.Trigger = append(a.Trigger, *n)
 			}
 			continue
@@ -110,7 +111,7 @@ func running(s State, c Config) Action {
 	a.Stop = true
 	a.Why = fmt.Sprintf("maintenance on %s is due %s", first.Name, first.Event.Deadline.UTC().Format(time.RFC3339))
 	for _, n := range s.Nodes {
-		if n.Up && n.InJob && n.Event != nil && n.Event.CanReschedule {
+		if n.Up && n.InJob && ((n.Name == first.Name && n.Event.CanReschedule) || c.early(s.Now, &n)) {
 			a.Trigger = append(a.Trigger, n)
 		}
 	}
@@ -120,35 +121,21 @@ func running(s State, c Config) Action {
 
 func down(s State, c Config) Action {
 	var a Action
-	var pending []Node
-	up := 0
 	for _, n := range s.Nodes {
-		if !n.Up {
-			continue
-		}
-		up++
-		if n.Event != nil && n.Event.CanReschedule {
-			pending = append(pending, n)
+		if n.Up && c.early(s.Now, &n) {
+			a.Trigger = append(a.Trigger, n)
 		}
 	}
-	if len(pending) == 0 {
-		return a
-	}
-	if up-len(pending) >= c.Size {
-		a.Trigger = pending
-		a.Why = "job is down and the spares cover every node with maintenance pending"
-	} else {
-		for _, n := range pending {
-			if c.Horizon == 0 || n.Event.Deadline.Sub(s.Now) <= c.Horizon {
-				a.Trigger = append(a.Trigger, n)
-			}
-		}
-		if len(a.Trigger) > 0 {
-			a.Why = "job is down, so pending maintenance rides along on the restart"
-		}
+	if len(a.Trigger) > 0 {
+		a.Why = "job is down, so pending maintenance rides along on the restart"
 	}
 	sortByName(a.Trigger)
 	return a
+}
+
+// early reports whether n's event can and should be started now.
+func (c Config) early(now time.Time, n *Node) bool {
+	return n.Event != nil && n.Event.CanReschedule && (c.Horizon == 0 || n.Event.Deadline.Sub(now) <= c.Horizon)
 }
 
 func sortByName(ns []Node) {

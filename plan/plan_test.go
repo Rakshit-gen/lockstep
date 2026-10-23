@@ -62,10 +62,17 @@ func TestDownPiggybacks(t *testing.T) {
 	if names(a.Trigger) != "a,b" {
 		t.Fatalf("no horizon: %+v", a)
 	}
-	// One node is enough: the spares cover both, so both go whatever the
-	// horizon.
-	a = Decide(State{Now: t0, Nodes: nodes}, Config{Size: 1, Horizon: time.Hour})
-	if names(a.Trigger) != "a,b" {
-		t.Fatalf("spares: %+v", a)
+}
+
+func TestHorizonAppliesWhileRunning(t *testing.T) {
+	nodes := []Node{
+		{Name: "a", Up: true, InJob: true, Event: ev(10*time.Minute, true)},
+		{Name: "b", Up: true, InJob: true, Event: ev(60*24*time.Hour, true)},
+		{Name: "s", Up: true, Event: ev(60*24*time.Hour, true)},
+	}
+	a := Decide(State{Now: t0, Running: true, Nodes: nodes}, Config{Size: 2, Margin: time.Hour, Horizon: 14 * 24 * time.Hour})
+	// a is due, b and the spare are too far off to start early.
+	if !a.Stop || names(a.Trigger) != "a" {
+		t.Fatalf("%+v", a)
 	}
 }
